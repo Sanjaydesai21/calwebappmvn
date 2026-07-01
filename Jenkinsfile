@@ -6,7 +6,7 @@ pipeline {
     }
 
     environment{
-        my-aws-credentials = credentials('aws-access')
+        my_aws_credentials = credentials('aws-access')
     }
 
     stages {
