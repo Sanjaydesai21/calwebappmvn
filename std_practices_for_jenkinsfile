@@ -1,0 +1,254 @@
+pipeline {
+    agent {
+        label 'ag-2'
+    }
+
+    environment {
+        // AWS Configuration
+        AWS_REGION = "us-east-1"
+        AWS_ACCOUNT_ID = "123456789012" // Replace with your AWS Account ID
+        ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+        ECR_REPOSITORY = "calcwebappmvn"
+        
+        // Image Configuration
+        IMAGE_TAG = "${BUILD_NUMBER}"
+        IMAGE_NAME = "${ECR_REGISTRY}/${ECR_REPOSITORY}"
+        
+        // EKS Configuration
+        EKS_CLUSTER_NAME = "my-eks-cluster"
+        EKS_NAMESPACE = "production"
+        DEPLOYMENT_NAME = "calcwebapp-deployment"
+        
+        // Credentials
+        AWS_CREDENTIALS = "aws-credentials-id"
+    }
+
+    tools {
+        maven 'xyz-maven'
+    }
+
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timestamps()
+        timeout(time: 1, unit: 'HOURS')
+        disableConcurrentBuilds()
+    }
+
+    stages {
+        stage('Git Checkout') {
+            steps {
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/mayur-z/calcwebappmvn.git'
+                    ]]
+                ])
+                echo "✅ Code checked out successfully"
+            }
+        }
+
+        stage('Build') {
+            steps {
+                echo "📦 Building application..."
+                sh 'mvn clean package -DskipTests'
+            }
+            post {
+                success {
+                    archiveArtifacts artifacts: '**/target/*.war', fingerprint: true
+                }
+            }
+        }
+
+        stage('Unit Tests') {
+            steps {
+                echo "🧪 Running unit tests..."
+                sh 'mvn test'
+            }
+            post {
+                always {
+                    junit '**/target/surefire-reports/*.xml'
+                }
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                echo "🔍 Running SonarQube analysis..."
+                withSonarQubeEnv('sonar') {
+                    sh 'mvn sonar:sonar'
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                script {
+                    echo "🐳 Building Docker image..."
+                    sh """
+                        docker build -t ${ECR_REPOSITORY}:${IMAGE_TAG} .
+                        docker tag ${ECR_REPOSITORY}:${IMAGE_TAG} ${ECR_REPOSITORY}:latest
+                        docker tag ${ECR_REPOSITORY}:${IMAGE_TAG} ${IMAGE_NAME}:${IMAGE_TAG}
+                        docker tag ${ECR_REPOSITORY}:${IMAGE_TAG} ${IMAGE_NAME}:latest
+                    """
+                }
+            }
+        }
+
+        stage('Security Scan') {
+            steps {
+                echo "🔒 Scanning Docker image for vulnerabilities..."
+                sh """
+                    docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \\
+                    aquasec/trivy image --severity HIGH,CRITICAL \\
+                    ${ECR_REPOSITORY}:${IMAGE_TAG}
+                """
+            }
+        }
+
+        stage('Push to ECR') {
+            steps {
+                script {
+                    echo "📤 Pushing image to AWS ECR..."
+                    withAWS(credentials: "${AWS_CREDENTIALS}", region: "${AWS_REGION}") {
+                        sh """
+                            # Login to ECR
+                            aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                            
+                            # Create repository if it doesn't exist
+                            aws ecr describe-repositories --repository-names ${ECR_REPOSITORY} --region ${AWS_REGION} || \
+                            aws ecr create-repository --repository-name ${ECR_REPOSITORY} --region ${AWS_REGION}
+                            
+                            # Push images
+                            docker push ${IMAGE_NAME}:${IMAGE_TAG}
+                            docker push ${IMAGE_NAME}:latest
+                            
+                            echo "✅ Image pushed successfully to ECR"
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Update Kubernetes Manifests') {
+            steps {
+                script {
+                    echo "📝 Updating Kubernetes deployment manifests..."
+                    sh """
+                        # Update deployment.yaml with new image tag
+                        sed -i 's|image:.*|image: ${IMAGE_NAME}:${IMAGE_TAG}|g' k8s/deployment.yaml
+                        
+                        # Display the changes
+                        cat k8s/deployment.yaml
+                    """
+                }
+            }
+        }
+
+        stage('Deploy to EKS') {
+            steps {
+                script {
+                    echo "🚀 Deploying to EKS cluster..."
+                    withAWS(credentials: "${AWS_CREDENTIALS}", region: "${AWS_REGION}") {
+                        sh """
+                            # Configure kubectl for EKS
+                            aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --region ${AWS_REGION}
+                            
+                            # Verify connection
+                            kubectl cluster-info
+                            
+                            # Create namespace if it doesn't exist
+                            kubectl create namespace ${EKS_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+                            
+                            # Apply Kubernetes manifests
+                            kubectl apply -f k8s/ -n ${EKS_NAMESPACE}
+                            
+                            # Wait for rollout to complete
+                            kubectl rollout status deployment/${DEPLOYMENT_NAME} -n ${EKS_NAMESPACE} --timeout=5m
+                            
+                            # Get deployment status
+                            kubectl get pods -n ${EKS_NAMESPACE} -l app=${DEPLOYMENT_NAME}
+                            
+                            echo "✅ Deployment completed successfully"
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                script {
+                    echo "✅ Verifying deployment..."
+                    withAWS(credentials: "${AWS_CREDENTIALS}", region: "${AWS_REGION}") {
+                        sh """
+                            # Check pod status
+                            kubectl get pods -n ${EKS_NAMESPACE} -l app=${DEPLOYMENT_NAME}
+                            
+                            # Check service
+                            kubectl get svc -n ${EKS_NAMESPACE}
+                            
+                            # Check deployment details
+                            kubectl describe deployment ${DEPLOYMENT_NAME} -n ${EKS_NAMESPACE}
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Cleanup Local Images') {
+            steps {
+                echo "🧹 Cleaning up local Docker images..."
+                sh """
+                    docker rmi ${ECR_REPOSITORY}:${IMAGE_TAG} || true
+                    docker rmi ${ECR_REPOSITORY}:latest || true
+                    docker rmi ${IMAGE_NAME}:${IMAGE_TAG} || true
+                    docker rmi ${IMAGE_NAME}:latest || true
+                    docker image prune -f
+                """
+            }
+        }
+    }
+
+    post {
+        success {
+            script {
+                echo "✅ Pipeline completed successfully!"
+                
+                // Get service URL
+                withAWS(credentials: "${AWS_CREDENTIALS}", region: "${AWS_REGION}") {
+                    def serviceUrl = sh(
+                        script: "kubectl get svc -n ${EKS_NAMESPACE} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].hostname}'",
+                        returnStdout: true
+                    ).trim()
+                    
+                    echo "🌐 Application URL: http://${serviceUrl}"
+                }
+            }
+        }
+
+        failure {
+            echo "❌ Pipeline failed!"
+            script {
+                // Rollback if deployment fails
+                withAWS(credentials: "${AWS_CREDENTIALS}", region: "${AWS_REGION}") {
+                    sh """
+                        kubectl rollout undo deployment/${DEPLOYMENT_NAME} -n ${EKS_NAMESPACE} || true
+                    """
+                }
+            }
+        }
+
+        always {
+            cleanWs()
+        }
+    }
+}

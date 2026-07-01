@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: calc-deployment
+  labels:
+    app: calc
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: calc
+  template:
+    metadata:
+      labels:
+        app: calc
+    spec:
+      containers:
+      - name: calc
+        image: 632295789918.dkr.ecr.us-east-2.amazonaws.com/app_cal
+        ports:
+        - containerPort: 80
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "250m"
+            memory: "256Mi"
+      imagePullSecrets:
+      - name: my-ecr-secret-cbz
+            
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: calc-loadbalancer
+spec:
+  type: LoadBalancer
+  selector:
+    app: calc
+  ports:
+    - protocol: TCP
+      port: 80        # The public port exposed by the cloud load balancer
+      targetPort: 8080 
+
+

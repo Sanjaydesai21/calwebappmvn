@@ -1,0 +1,24 @@
+#!/bin/bash
+
+sudo apt update -y
+sudo apt upgrade -y
+
+sudo apt install openjdk-21-jdk -y
+sudo useradd -m -s /bin/bash jenkins
+
+sudo mkdir -p /home/jenkins/.ssh
+sudo chown jenkins:jenkins /home/jenkins/.ssh
+sudo chmod 700 /home/jenkins/.ssh
+sudo mkdir -p /home/jenkins/jenkins-agent
+sudo chown jenkins:jenkins /home/jenkins/jenkins-agent
+
+
+sudo apt install docker.io -y
+
+sudo usermod -aG docker jenkins
+
+sudo snap install aws-cli --classic
+
+sudo snap install kubectl --classic
+
+

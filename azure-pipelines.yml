@@ -1,0 +1,30 @@
+
+
+# test commit
+# Maven
+# Build your Java project and run tests with Apache Maven.
+# Add steps that analyze code, save build artifacts, deploy, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/java
+
+trigger:
+- master
+
+pool: default
+
+steps:
+- task: Maven@3
+  inputs:
+    mavenPomFile: 'pom.xml'
+    mavenOptions: '-Xmx3072m'
+    javaHomeOption: 'JDKVersion'
+    jdkVersionOption: '1.11'
+    jdkArchitectureOption: 'x64'
+    goals: 'package'
+- task: TomcatDeployment@1
+  inputs:
+    TomcatUrl: '$(TOMCAT_SERVER)'
+    Username: '$(TOMCAT_USER)'
+    Password: '$(TOMCAT_PASSWORD)'
+    Warfile: 'target/calcwebapp.war'
+    Context: '/local-agent-deploy'
+    ServerVersion: '7OrAbove'
