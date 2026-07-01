@@ -70,9 +70,9 @@ pipeline {
             steps {
                 sh '''
                     aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 194226864100.dkr.ecr.ap-south-1.amazonaws.com
-                    docker build -t calwebapp .
-                    docker tag calwebapp:latest 194226864100.dkr.ecr.ap-south-1.amazonaws.com/calwebapp:latest
-                    docker push 194226864100.dkr.ecr.ap-south-1.amazonaws.com/calwebapp:latest                
+                    docker build -t calcwebappmvn .
+                    docker tag calcwebappmvn:latest 194226864100.dkr.ecr.ap-south-1.amazonaws.com/calcwebappmvn:latest
+                    docker push 194226864100.dkr.ecr.ap-south-1.amazonaws.com/calcwebappmvn:latest
                 '''
             }
         }
