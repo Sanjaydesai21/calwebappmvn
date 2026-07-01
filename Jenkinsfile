@@ -61,5 +61,17 @@ pipeline {
                 echo "SonarQube report generated successfully. Please check the SonarQube dashboard for details."
             }
         }
+
+        stage("docker build & push"){
+            steps {
+                sh '''
+                    aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 194226864100.dkr.ecr.ap-south-1.amazonaws.com
+                    docker build -t calwebapp .
+                    docker tag calwebapp:latest 194226864100.dkr.ecr.ap-south-1.amazonaws.com/calwebapp:latest
+                    docker push 194226864100.dkr.ecr.ap-south-1.amazonaws.com/calwebapp:latest                
+                '''
+            }
+        }
+
     }
 }
