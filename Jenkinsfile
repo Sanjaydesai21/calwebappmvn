@@ -106,9 +106,48 @@ pipeline {
     post {
         success {
             echo 'Pipeline completed successfully.'
+
+            emailext(
+                subject: "✅ SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                mimeType: 'text/html',
+                body: """
+                <h2>Jenkins Pipeline Successful</h2>
+
+                <b>Job Name:</b> ${env.JOB_NAME}<br>
+                <b>Build Number:</b> ${env.BUILD_NUMBER}<br>
+                <b>Status:</b> SUCCESS<br>
+                <b>Build URL:</b>
+                <a href="${env.BUILD_URL}">${env.BUILD_URL}</a><br><br>
+
+                <b>Project:</b> Calculator Web App<br>
+                <b>Deployment:</b> AWS EKS<br>
+                <b>Docker Image:</b> calcwebappmvn:v2
+                """,
+                attachLog: true,
+                to: "sanjydesai2101@gmail.com"
+            )
         }
+
         failure {
             echo 'Pipeline failed. Please check the logs for details.'
+
+            emailext(
+                subject: "❌ FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                mimeType: 'text/html',
+                body: """
+                <h2>Jenkins Pipeline Failed</h2>
+
+                <b>Job Name:</b> ${env.JOB_NAME}<br>
+                <b>Build Number:</b> ${env.BUILD_NUMBER}<br>
+                <b>Status:</b> FAILED<br>
+                <b>Build URL:</b>
+                <a href="${env.BUILD_URL}">${env.BUILD_URL}</a><br>
+
+                Please check the console logs for more details.
+                """,
+                attachLog: true,
+                to: "sanjydesai2101@gmail.com"
+            )
         }
     }
 }
