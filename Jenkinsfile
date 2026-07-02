@@ -80,8 +80,6 @@ pipeline {
             steps {
                 sh '''
                     aws eks update-kubeconfig --region ap-south-1 --name my-cluster-sanjay
-                    sudo snap install kubectl --classic
-                    kubectl version --client
 
                     kubectl apply -f calc-deployment-svc.yaml
 
