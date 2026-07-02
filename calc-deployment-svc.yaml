@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: calc
-        image: 194226864100.dkr.ecr.ap-south-1.amazonaws.com/calcwebappmvn:latest
+        image: 194226864100.dkr.ecr.ap-south-1.amazonaws.com/calcwebappmvn:v2
         ports:
         - containerPort: 8080
         resources:
