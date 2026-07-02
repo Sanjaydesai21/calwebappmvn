@@ -77,25 +77,32 @@ pipeline {
             }
         }
         stage('Eks deploy') {
-            steps{
+            steps {
                 sh '''
                     aws eks update-kubeconfig --region ap-south-1 --name my-cluster-sanjay
                     sudo snap install kubectl --classic
-                    sudo kubectl --version
+                    kubectl version --client
+
                     kubectl apply -f calc-deployment-svc.yaml
+
                     kubectl get pods
-                    sleep 30
-                    kubectl get pods 
-                    kubectl get svc
+
+                    echo "Waiting for LoadBalancer DNS..."
+
+                    while [ -z "$(kubectl get svc calc-loadbalancer -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')" ]; do
+                        echo "Waiting..."
+                        sleep 10
+                    done
+
+                    echo "LoadBalancer DNS:"
+                    kubectl get svc calc-loadbalancer -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+                    echo
                 '''
             }
+
             post {
                 success {
                     echo 'EKS deployment completed successfully.'
-                    sh '''
-                        kubectl get svc -o jsonpath='{.items[*].status.loadBalancer.ingress[*].hostname}'
-                        echo
-                    '''
                 }
                 failure {
                     echo 'EKS deployment failed. Please check the logs for details.'
