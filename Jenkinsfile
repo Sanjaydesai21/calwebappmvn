@@ -76,6 +76,25 @@ pipeline {
                 '''
             }
         }
-
+        stage('Eks deploy') {
+            steps{
+                sh '''
+                    aws eks update-kubeconfig --region ap-south-1 --name my-cluster-sanjay
+                    kubectl apply -f calc-deployment-svc.yaml
+                    kubectl get pods
+                    sleep 30
+                    kubectl get pods 
+                    kubectl get svc
+                '''
+            }
+        }
+    }
+    post {
+        success {
+            echo 'Pipeline completed successfully.'
+        }
+        failure {
+            echo 'Pipeline failed. Please check the logs for details.'
+        }
     }
 }

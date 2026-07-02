@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        my_aws_access= credentials('aws-access')
+        my_aws_credentials= credentials('aws-access')
     }
 
     tools {
