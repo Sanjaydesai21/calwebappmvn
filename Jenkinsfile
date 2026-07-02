@@ -80,12 +80,26 @@ pipeline {
             steps{
                 sh '''
                     aws eks update-kubeconfig --region ap-south-1 --name my-cluster-sanjay
+                    sudo snap install kubectl --classic
+                    sudo kubectl --version
                     kubectl apply -f calc-deployment-svc.yaml
                     kubectl get pods
                     sleep 30
                     kubectl get pods 
                     kubectl get svc
                 '''
+            }
+            post {
+                success {
+                    echo 'EKS deployment completed successfully.'
+                    sh '''
+                        kubectl get svc -o jsonpath='{.items[*].status.loadBalancer.ingress[*].hostname}'
+                        echo
+                    '''
+                }
+                failure {
+                    echo 'EKS deployment failed. Please check the logs for details.'
+                }
             }
         }
     }
